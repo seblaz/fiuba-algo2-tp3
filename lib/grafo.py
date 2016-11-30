@@ -1,8 +1,17 @@
 from lib.cola import Cola
+from lib.heap import Heap
+from lib.vertice import Vertice
+from lib.arista import Arista
+from lib.heapdict import heapdict
 import copy
+import queue
+import random
+import heapq
+import sys
 
 visitar_nulo = lambda a,b,c,d: True
 heuristica_nula = lambda actual,destino: 0
+INF = "INF"
 
 class Grafo(object):
     '''Clase que representa un grafo. El grafo puede ser dirigido, o no, y puede no indicarsele peso a las aristas
@@ -18,9 +27,7 @@ class Grafo(object):
         return len(self._grafo)
 
     def add(self, valor):
-        '''Agrega un nuevo vertice con el valor indicado. Valor debe ser de identificador unico del vertice.
-        En caso que el identificador ya se encuentre asociado a un vertice, se actualizara el valor.
-        '''
+        '''Agrega un nuevo vertice con el valor indicado. Valor debe ser de identificador unico del vertice.'''
         if not valor in self._grafo:
             self._grafo[valor] = {}
 
@@ -42,6 +49,9 @@ class Grafo(object):
     def __contains__(self, valor):
         ''' Determina si el grafo contiene un vertice con el identificador indicado.'''
         return valor in self._grafo
+
+    def __eq__(a, b):
+        return a._grafo == b._grafo
 
     def __iter__(self):
         '''Devuelve un iterador de vertices, sin ningun tipo de relacion entre los consecutivos'''
@@ -88,7 +98,7 @@ class Grafo(object):
 
     def adyacentes(self, valor):
         '''Devuelve una lista con los vertices (identificadores) adyacentes al indicado. Si no existe el vertice, se lanzara KeyError'''
-        return self._grafo[valor].keys()
+        return list(self._grafo[valor].keys())
 
     def _recorridos(self, visitar, extra, inicio, f_recorrer):
         """Funcion interna que sirve para los recorridos bfs y dfs."""
@@ -163,14 +173,14 @@ class Grafo(object):
         '''
         def dfs_visitar(grafo, v, visitados, padre, orden, visitar, extra):
             visitados[v] = True
-            if not visitar(v, padre, orden, extra): return False
+            if not padre[v] and not visitar(v, padre, orden, extra): return False
             for w in grafo.adyacentes(v):
                 if w not in visitados:
                     padre[w] = v
                     orden[w] = orden[v] + 1
                     if not visitar(w, padre, orden, extra): return False
-                    dfs_visitar(grafo, w, visitados, padre, orden, visitar, extra)
-            # para implementar el orden topologico, aca abria que insertar el elemento en la lista enlazada
+                    if not dfs_visitar(grafo, w, visitados, padre, orden, visitar, extra): return False
+            # para implementar el orden topologico, aca abria que insertar el elemento en la lista enlazada (solo paragrafos dirigidos)
             return True
 
         return self._recorridos(visitar, extra, inicio, dfs_visitar)
@@ -220,13 +230,79 @@ class Grafo(object):
             - Listado de vertices (identificadores) ordenado con el recorrido, incluyendo a los vertices de origen y destino.
             En caso que no exista camino entre el origen y el destino, se devuelve None.
         '''
-        raise NotImplementedError()
+        if not destino in self: raise KeyError("El destino no se encuentra en el grafo.")
+        n_grafo = self.sssp(origen, destino)
+        lista = []
+        orden_actual = 0
 
-    def mst(self):
+        def visitar(v, padre, orden, extra):
+            if extra[0] != orden[v]:
+                for x in range(extra[0]-orden[v]):
+                    extra[1].pop()
+            extra[1].append(v)
+            extra[0] = orden[v]+1
+            return v != extra[2]
+
+        padre, orden = n_grafo.dfs(visitar, [orden_actual, lista, destino], origen)
+        return lista if lista[-1] == destino else None # en caso que no sea conexo
+
+    def sssp(self, origen, destino = None): # (Single-source short path)
+        '''Calcula los caminos minimos desde un vertice origen a todos los vertices alcanzables desde ese vertice a menos que se indice un destino, en cuyo caso terminara la ejecuccion cuando encuentre el camino mas corto al destino.
+        Toma como hipotesis que los pesos de los vertices son positivos. Parametros:
+            - origen y destino: identificadores de vertices dentro del grafo. Si alguno de estos no existe dentro del grafo, lanzara KeyError.
+        Devuelve:
+            - un nuevo grafo, con los mismos vertices que el original, pero en con los caminos minimos desde el origen.
+        '''
+        n_grafo = Grafo(self._es_dirigido)
+        padre = {}
+        visitados = {}
+        heap_v = heapdict()
+        for v in self:
+            n_grafo.add(v)
+            heap_v[v] = float("inf")
+        heap_v[origen] = 0
+        visitados[origen] = True
+        padre[origen] = None
+
+        while heap_v:
+            key, value = heap_v.popitem()
+            visitados[key] = True # key esta en el camino minimo
+            if destino and key == destino: break
+            for v in self.adyacentes(key):
+                if v not in visitados and heap_v[v] > value + self.obtener_peso_arista(key, v):# relax
+                    for a in list(n_grafo._grafo[v]):
+                        n_grafo.borrar_arista(a, v)
+                    n_grafo.agregar_arista(key, v, self.obtener_peso_arista(key, v))
+                    heap_v[v] = value + self.obtener_peso_arista(key, v)
+                    padre[v] = key
+        return n_grafo
+
+    def mst(self): # Calculado con Kruskal
         '''Calcula el Arbol de Tendido Minimo (MST) para un grafo no dirigido. En caso de ser dirigido, lanza una excepcion de tipo TypeError.
         Devuelve: un nuevo grafo, con los mismos vertices que el original, pero en forma de MST.'''
         if self._es_dirigido: raise TypeError("El Arbol de Tendido Minimo se calcula para grafos no dirigidos.")
-        raise NotImplementedError()
+
+        n_grafo = Grafo()
+        set_princ = {} # representacion de un disjoint-set.
+        set_aux   = {} # estructura aux para representar el set
+        l_aristas = []
+
+        for v in self:
+            n_grafo.add(v)
+            set_princ[v] = v
+            set_aux[v]   = [v]
+            for a in self._grafo[v]:
+                l_aristas.append(Arista(v, a, self.obtener_peso_arista(v, a)))
+        l_aristas.sort()
+
+        for a in l_aristas:
+            if set_princ[a.v1] != set_princ[a.v2]:
+                n_grafo.agregar_arista(a.v1, a.v2, self.obtener_peso_arista(a.v1, a.v2))
+                for v in set_aux[a.v2]:
+                    set_princ[v] = set_princ[a.v1]
+                    set_aux[a.v1].append(v)
+                    set_aux[v] = set_aux[a.v1]
+        return n_grafo
 
     def random_walk(self, largo, origen = None, pesado = False):
         ''' Devuelve una lista con un recorrido aleatorio de grafo.
@@ -237,4 +313,27 @@ class Grafo(object):
             Devuelve:
                 Una lista con los vertices (ids) recorridos, en el orden del recorrido.
         '''
-        raise NotImplementedError()
+        lista = []
+        lista_aux = []
+        if not origen:
+            origen = random.choice(list(self._grafo.keys()))
+        actual = origen
+        if not pesado:
+            for x in range(largo):
+                actual = random.choice(self.adyacentes(actual))
+                lista.append(actual)
+        else:
+            for x in range(largo):
+                for v in self.adyacentes(actual):
+                    for x in range(self.obtener_peso_arista(actual, v)):
+                        lista_aux.append(v)
+                actual = random.choice(lista_aux)
+                lista.append(actual)
+                lista_aux = []
+        return lista
+
+    def __str__(self):
+        return str(self._grafo)
+
+    def __repr__(self):
+        return self.__str__()

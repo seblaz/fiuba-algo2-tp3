@@ -9,6 +9,10 @@ def run(pruebas_volumen = 100):
     pruebas_grafo_bfs()
     pruebas_grafo_transpuesto()
     pruebas_grafo_componentes_conexas()
+    pruebas_grafo_mst()
+    pruebas_grafo_sssp()
+    pruebas_grafo_camino_minimo()
+    pruebas_grafo_random_walk()
 
 def pruebas_grafo_vacio():
     grafo = Grafo()
@@ -133,8 +137,6 @@ def pruebas_grafo_bfs():
     grafo.agregar_arista("G", "C")
 
     padre, orden = grafo.bfs(inicio="A")
-    # print(padre.items())
-    # print(orden.items())
     # en bfs el arbol de orden debe ser igual para cualquier caso
     print_test("Pruebas Grafo, bfs ok", orden["A"] == 0)
     print_test("Pruebas Grafo, bfs ok", orden["B"] == 1)
@@ -143,12 +145,11 @@ def pruebas_grafo_bfs():
     print_test("Pruebas Grafo, bfs ok", orden["E"] == 2)
     print_test("Pruebas Grafo, bfs ok", orden["G"] == 2)
     print_test("Pruebas Grafo, bfs ok", orden["F"] == 3)
-    # padre, orden = grafo.dfs("A")
-    #
-    # print(padre.items())
-    # print(orden.items())
 
 def pruebas_grafo_transpuesto():
+    grafo = Grafo()
+    print_exception(grafo.transpuesto, TypeError, "Pruebas Grafo, grafo transpuesto en un grafo no-dirigido lanza TypeError")
+
     grafo = Grafo(True)
     grafo.add("A")
     grafo.add("B")
@@ -188,7 +189,12 @@ def pruebas_grafo_transpuesto():
     print_test("Pruebas Grafo, grafo original ok", "G" in grafo.adyacentes("F"))
 
 def pruebas_grafo_componentes_conexas():
+    grafo = Grafo(True)
+    print_exception(grafo.componentes_conexas, TypeError, "Pruebas Grafo, componentes conexas de un grafo dirigido lanza TypeError")
+
     grafo = Grafo()
+    print_test("Pruebas Grafo, componentes conexas de un grafo vacio es None", not grafo.componentes_conexas())
+
     grafo.add("A")
     grafo.add("B")
     grafo.add("C")
@@ -206,4 +212,199 @@ def pruebas_grafo_componentes_conexas():
     # grafo.agregar_arista("G", "C")
 
     comp_conx = grafo.componentes_conexas()
-    print_test("Pruebas Grafo, componentes conexas ok", ["G","F"] or ["F","G"] in comp_conx)
+    print_test("Pruebas Grafo, cantidad componentes conexas es dos", len(comp_conx)==2)
+    if "F" in comp_conx[0]:
+        print_test("Pruebas Grafo, primera componente conexa ok", comp_conx[0] == ["G","F"] or comp_conx[0] == ["F","G"])
+        print_test("Pruebas Grafo, segunda componente conexa ok", "A" in comp_conx[1])
+        print_test("Pruebas Grafo, segunda componente conexa ok", "B" in comp_conx[1])
+        print_test("Pruebas Grafo, segunda componente conexa ok", "C" in comp_conx[1])
+        print_test("Pruebas Grafo, segunda componente conexa ok", "D" in comp_conx[1])
+        print_test("Pruebas Grafo, segunda componente conexa ok", "E" in comp_conx[1])
+    else:
+        print_test("Pruebas Grafo, primera componente conexa ok", comp_conx[1] == ["G","F"] or comp_conx[1] == ["F","G"])
+        print_test("Pruebas Grafo, segunda componente conexa ok", "A" in comp_conx[0])
+        print_test("Pruebas Grafo, segunda componente conexa ok", "B" in comp_conx[0])
+        print_test("Pruebas Grafo, segunda componente conexa ok", "C" in comp_conx[0])
+        print_test("Pruebas Grafo, segunda componente conexa ok", "D" in comp_conx[0])
+        print_test("Pruebas Grafo, segunda componente conexa ok", "E" in comp_conx[0])
+
+def visitar_y_sumar(v, padre, orden, suma):
+    if padre[v]:
+        suma[0]+=suma[1].obtener_peso_arista(v, padre[v])
+    return True
+
+def pruebas_grafo_mst(): # Ejemplo del capitulo 23 de Cormen
+    grafo = Grafo(True)
+    print_exception(grafo.componentes_conexas, TypeError, "Pruebas Grafo, mst de un grafo dirigido lanza TypeError")
+
+    grafo = Grafo()
+    print_test("Pruebas Grafo, MST de un grafo vacio es None", not grafo.mst())
+
+    grafo.add("A")
+    grafo.add("B")
+    grafo.add("C")
+    grafo.add("D")
+    grafo.add("E")
+    grafo.add("F")
+    grafo.add("G")
+    grafo.add("H")
+    grafo.add("I")
+
+    grafo.agregar_arista("A", "B", 4)
+    grafo.agregar_arista("A", "H", 8)
+    grafo.agregar_arista("B", "C", 8)
+    grafo.agregar_arista("B", "H", 8)
+    grafo.agregar_arista("C", "D", 7)
+    grafo.agregar_arista("C", "F", 4)
+    grafo.agregar_arista("C", "I", 2)
+    grafo.agregar_arista("D", "E", 9)
+    grafo.agregar_arista("D", "F", 14)
+    grafo.agregar_arista("E", "F", 10)
+    grafo.agregar_arista("F", "G", 2)
+    grafo.agregar_arista("G", "I", 6)
+    grafo.agregar_arista("G", "H", 1)
+    grafo.agregar_arista("H", "I", 7)
+
+    n_grafo = grafo.mst()
+    suma = [0, n_grafo]
+
+    n_grafo.dfs(visitar_y_sumar, suma)
+    print_test("Pruebas Grafo, la suma del mst conexo es correcta", suma[0] == 37)
+
+    grafo.borrar_arista("B", "H")
+    grafo.borrar_arista("B", "C")
+    grafo.borrar_arista("H", "G")
+    grafo.borrar_arista("H", "I") # el grafo ya no es conexo
+    n_grafo = grafo.mst() # se deberian formar dos arboles
+
+    suma = [0, n_grafo]
+    n_grafo.dfs(visitar_y_sumar, suma, "A") # primer arbol
+    print_test("Pruebas Grafo, la suma del primer arbol del mst no conexo es correcta", suma[0] == 12)
+
+    suma = [0, n_grafo]
+    n_grafo.dfs(visitar_y_sumar, suma, "I") # segundo arbol
+    print_test("Pruebas Grafo, la suma del segundo arbol del mst no conexo es correcta", suma[0] == 24)
+
+def pruebas_grafo_sssp():
+    grafo = Grafo()
+    print_exception(grafo.sssp, KeyError, "Pruebas Grafo, sssp  con una clave que no existe en lanza KeyError", "A")
+
+    grafo.add("A")
+    print_test("Pruebas Grafo, sssp en un grafo unitario es el mismo grafo", grafo.sssp("A") == grafo)
+
+    grafo.add("B")
+    grafo.add("C")
+    grafo.add("D")
+    grafo.add("E")
+    grafo.add("F")
+    grafo.add("G")
+    grafo.add("H")
+    grafo.add("I")
+
+    grafo.agregar_arista("A", "B", 4)
+    grafo.agregar_arista("A", "H", 8)
+    grafo.agregar_arista("B", "C", 8)
+    grafo.agregar_arista("B", "H", 8)
+    grafo.agregar_arista("C", "D", 7)
+    grafo.agregar_arista("C", "F", 4)
+    grafo.agregar_arista("C", "I", 2)
+    grafo.agregar_arista("D", "E", 9)
+    grafo.agregar_arista("D", "F", 14)
+    grafo.agregar_arista("E", "F", 10)
+    grafo.agregar_arista("F", "G", 2)
+    grafo.agregar_arista("G", "I", 6)
+    grafo.agregar_arista("G", "H", 1)
+    grafo.agregar_arista("H", "I", 7)
+
+    n_grafo = grafo.sssp("A")
+    suma = [0, n_grafo]
+    n_grafo.dfs(visitar_y_sumar, suma, "A")
+    print_test("Pruebas Grafo, la suma de las distancias minimas desde 'A' a todos los vertices es correcta", suma[0] == 42)
+
+    grafo.borrar_arista("B", "H")
+    grafo.borrar_arista("B", "C")
+    grafo.borrar_arista("H", "G")
+    grafo.borrar_arista("H", "I") # el grafo ya no es conexo
+    n_grafo = grafo.sssp("A")
+
+    suma = [0, n_grafo]
+    n_grafo.dfs(visitar_y_sumar, suma, "A")
+    print_test("Pruebas Grafo, la suma de las distancias minimas desde 'A' a todos los vertices es correcta", suma[0] == 12)
+
+    comp_conx = n_grafo.componentes_conexas()
+    print_test("Pruebas Grafo, las componentes conexas del grafo de distancias minimas desde 'A' es 7", len(comp_conx) == 7)
+
+def pruebas_grafo_camino_minimo():
+    grafo = Grafo()
+    print_exception(grafo.sssp, KeyError, "Pruebas Grafo, camino minimo con una clave que no existe en lanza KeyError", "A")
+
+    grafo.add("A")
+    grafo.add("B")
+    grafo.add("C")
+    grafo.add("D")
+    grafo.add("E")
+    grafo.add("F")
+    grafo.add("G")
+    grafo.add("H")
+    grafo.add("I")
+
+    grafo.agregar_arista("A", "B", 4)
+    grafo.agregar_arista("A", "H", 8)
+    grafo.agregar_arista("B", "C", 8)
+    grafo.agregar_arista("B", "H", 8)
+    grafo.agregar_arista("C", "D", 7)
+    grafo.agregar_arista("C", "F", 4)
+    grafo.agregar_arista("C", "I", 2)
+    grafo.agregar_arista("D", "E", 9)
+    grafo.agregar_arista("D", "F", 14)
+    grafo.agregar_arista("E", "F", 10)
+    grafo.agregar_arista("F", "G", 2)
+    grafo.agregar_arista("G", "I", 6)
+    grafo.agregar_arista("G", "H", 1)
+    grafo.agregar_arista("H", "I", 7)
+
+    print_test("Pruebas Grafo, camino minimo A-A es correcto", grafo.camino_minimo("A", "A") == ["A"])
+    print_test("Pruebas Grafo, camino minimo A-I es correcto", grafo.camino_minimo("A", "I") == ["A", "B", "C", "I"])
+    print_test("Pruebas Grafo, camino minimo A-E es correcto", grafo.camino_minimo("A", "E") == ["A", "H", "G", "F", "E"])
+    print_test("Pruebas Grafo, camino minimo I-A es correcto", grafo.camino_minimo("I", "A") == ["I", "C", "B", "A"])
+    print_test("Pruebas Grafo, camino minimo C-F es correcto", grafo.camino_minimo("C", "F") == ["C", "F"])
+
+    grafo.borrar_arista("B", "H")
+    grafo.borrar_arista("B", "C")
+    grafo.borrar_arista("H", "G")
+    grafo.borrar_arista("H", "I") # el grafo ya no es conexo
+
+    print_test("Pruebas Grafo, camino minimo A-C es None", not grafo.camino_minimo("A", "C"))
+    print_test("Pruebas Grafo, camino minimo B-D es None", not grafo.camino_minimo("B", "D"))
+    print_test("Pruebas Grafo, camino minimo F-H es None", not grafo.camino_minimo("F", "H"))
+
+def pruebas_grafo_random_walk():
+    grafo = Grafo()
+
+    grafo.add("A")
+    grafo.add("B")
+    grafo.add("C")
+    grafo.add("D")
+    grafo.add("E")
+    grafo.add("F")
+    grafo.add("G")
+    grafo.add("H")
+    grafo.add("I")
+
+    grafo.agregar_arista("A", "B", 4)
+    grafo.agregar_arista("A", "H", 8)
+    grafo.agregar_arista("B", "C", 8)
+    grafo.agregar_arista("B", "H", 8)
+    grafo.agregar_arista("C", "D", 7)
+    grafo.agregar_arista("C", "F", 4)
+    grafo.agregar_arista("C", "I", 2)
+    grafo.agregar_arista("D", "E", 9)
+    grafo.agregar_arista("D", "F", 14)
+    grafo.agregar_arista("E", "F", 10)
+    grafo.agregar_arista("F", "G", 2)
+    grafo.agregar_arista("G", "I", 6)
+    grafo.agregar_arista("G", "H", 1)
+    grafo.agregar_arista("H", "I", 7)
+
+    print_test("Pruebas Grafo, random walk tiene el largo correcto", len(grafo.random_walk(10, pesado = False)) == 10)
+    print_test("Pruebas Grafo, random walk tiene el largo correcto", len(grafo.random_walk(10, pesado = True)) == 10)

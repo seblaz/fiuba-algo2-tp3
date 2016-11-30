@@ -1,13 +1,23 @@
 class Vertice(object):
-    """docstring for ."""
-    def __init__(self, id, valor):
-        self.id     = id
-        self.valor  = valor
+    """Clase que representa un vertice."""
+    def __init__(self, nombre, clave, *args):
+        """Contructor de la clase Vertice. Parametros:
+            -clave: se utilizara para las operaciones de comparacion.
+            -args: tuplas de valores extras que se quieran guardar."""
+        self.clave = clave
+        self.nombre = nombre
+        for nombre_dato, arg in args:
+            self.__setattr__(nombre_dato,  type(arg))
+            self.__dict__[nombre_dato] = arg
 
     def __eq__(a, b):
-        return a.id == b.id or a.valor == b.valor
+        return a.nombre == b.nombre
 
-    def __hash__(self):
-        return hash((self.id, self.valor))
-        # return hash(self.id)
-        # return hash(self.valor)+hash(self.id)
+    def __lt__(a, b):
+        return a.clave < b.clave
+
+    def __str__(self):
+        return "({}, {})".format(self.nombre, self.clave)
+
+    def __repr__(self):
+        return self.__str__()

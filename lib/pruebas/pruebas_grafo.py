@@ -13,6 +13,7 @@ def run(pruebas_volumen = 100):
     pruebas_grafo_sssp()
     pruebas_grafo_camino_minimo()
     pruebas_grafo_random_walk()
+    # test()
 
 def pruebas_grafo_vacio():
     grafo = Grafo()
@@ -92,13 +93,6 @@ def pruebas_grafo_varios_elementos():
             except ValueError:
                 pass
 
-    for vertice1 in grafo: # chequeo que no halla aristas
-        for vertice2 in grafo:
-            ok = grafo.obtener_peso_arista(vertice1, vertice2)
-            if ok: break
-        if ok: break
-
-    print_test("Pruebas Grafo, borrar aristas ok", not ok)
     print_test("Pruebas Grafo, la cantidad de elementos es cuatro", len(grafo) == 4)
 
     grafo.agregar_arista(vars[0], vars[1])      #
@@ -290,7 +284,7 @@ def pruebas_grafo_sssp():
     print_exception(grafo.sssp, KeyError, "Pruebas Grafo, sssp  con una clave que no existe en lanza KeyError", "A")
 
     grafo.add("A")
-    print_test("Pruebas Grafo, sssp en un grafo unitario es el mismo grafo", grafo.sssp("A") == grafo)
+    print_test("Pruebas Grafo, sssp en un grafo unitario es el mismo grafo", grafo.crear_grafo_con_padre(grafo.sssp("A")[0], True) == grafo)
 
     grafo.add("B")
     grafo.add("C")
@@ -316,7 +310,7 @@ def pruebas_grafo_sssp():
     grafo.agregar_arista("G", "H", 1)
     grafo.agregar_arista("H", "I", 7)
 
-    n_grafo = grafo.sssp("A")
+    n_grafo = grafo.crear_grafo_con_padre(grafo.sssp("A")[0], True)
     suma = [0, n_grafo]
     n_grafo.dfs(visitar_y_sumar, suma, "A")
     print_test("Pruebas Grafo, la suma de las distancias minimas desde 'A' a todos los vertices es correcta", suma[0] == 42)
@@ -325,14 +319,11 @@ def pruebas_grafo_sssp():
     grafo.borrar_arista("B", "C")
     grafo.borrar_arista("H", "G")
     grafo.borrar_arista("H", "I") # el grafo ya no es conexo
-    n_grafo = grafo.sssp("A")
+    n_grafo = grafo.crear_grafo_con_padre(grafo.sssp("A")[0], True)
 
     suma = [0, n_grafo]
     n_grafo.dfs(visitar_y_sumar, suma, "A")
     print_test("Pruebas Grafo, la suma de las distancias minimas desde 'A' a todos los vertices es correcta", suma[0] == 12)
-
-    comp_conx = n_grafo.componentes_conexas()
-    print_test("Pruebas Grafo, las componentes conexas del grafo de distancias minimas desde 'A' es 7", len(comp_conx) == 7)
 
 def pruebas_grafo_camino_minimo():
     grafo = Grafo()
@@ -408,3 +399,29 @@ def pruebas_grafo_random_walk():
 
     print_test("Pruebas Grafo, random walk tiene el largo correcto", len(grafo.random_walk(10, pesado = False)) == 10)
     print_test("Pruebas Grafo, random walk tiene el largo correcto", len(grafo.random_walk(10, pesado = True)) == 10)
+
+def test():
+    grafo = Grafo()
+
+    grafo.add("A")
+    grafo.add("B")
+    grafo.add("C")
+    grafo.add("D")
+    grafo.add("E")
+    grafo.add("F")
+    grafo.add("G")
+    grafo.add("H")
+    grafo.add("I")
+
+    grafo.agregar_arista("A", "B", 1)
+    grafo.agregar_arista("A", "C", 9)
+    grafo.agregar_arista("B", "C", 8)
+    grafo.agregar_arista("B", "G", 10)
+    grafo.agregar_arista("C", "D", 14)
+    grafo.agregar_arista("C", "E", 12)
+    grafo.agregar_arista("D", "H", 8)
+    grafo.agregar_arista("D", "F", 3)
+    grafo.agregar_arista("E", "F", 4)
+    grafo.agregar_arista("F", "I", 1)
+
+    grafo.dijkstra_mejorado("A")

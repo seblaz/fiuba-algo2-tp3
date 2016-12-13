@@ -8,6 +8,8 @@ import queue
 import random
 import heapq
 import sys
+import operator
+import time
 
 visitar_nulo = lambda a,b,c,d: True
 heuristica_nula = lambda actual,destino: 0
@@ -88,17 +90,17 @@ class Grafo(object):
 
     def obtener_peso_arista(self, desde, hasta):
         '''Obtiene el peso de la arista que va desde el vertice 'desde', hasta el vertice 'hasta'. Parametros:
-            - desde y hasta: identificadores de vertices dentro del grafo. Si alguno de estos no existe dentro del grafo, lanzara KeyError.
+            - desde y hasta: identificadores de vertices dentro del grafo.
             En caso de no existir la union consultada, se devuelve None.
         '''
-        if not hasta in self._grafo: raise KeyError("No se encuentra el vertice en el grafo.")
-        if not hasta in self._grafo[desde]:
-            return None
+        # if not hasta in self._grafo: raise KeyError("No se encuentra el vertice en el grafo.")
+        # if not hasta in self._grafo[desde]:
+        #     return None
         return self._grafo[desde][hasta]
 
     def adyacentes(self, valor):
         '''Devuelve una lista con los vertices (identificadores) adyacentes al indicado. Si no existe el vertice, se lanzara KeyError'''
-        return list(self._grafo[valor].keys())
+        return self._grafo[valor].keys()
 
     def _recorridos(self, visitar, extra, inicio, f_recorrer):
         """Funcion interna que sirve para los recorridos bfs y dfs."""
@@ -147,6 +149,7 @@ class Grafo(object):
                         visitados[w] = True
                         padre[w] = v
                         orden[w] = orden[v] + 1
+                        # print(w, "\t"+padre[w])
                         if not visitar(w, padre, orden, extra): return False
                         q.encolar(w)
             return True
@@ -220,61 +223,105 @@ class Grafo(object):
         self.bfs(visitar, lista, None)
         return lista
 
-    def camino_minimo(self, origen, destino, heuristica=heuristica_nula):
-        '''Devuelve el recorrido minimo desde el origen hasta el destino, aplicando el algoritmo de Dijkstra, o bien
-        A* en caso que la heuristica no sea nula. Parametros:
+    def camino_minimo(self, origen, destino, modificar_peso = lambda peso:peso):
+        '''Devuelve el recorrido minimo desde el origen hasta el destino, aplicando el algoritmo de Dijkstra. Parametros:
             - origen y destino: identificadores de vertices dentro del grafo. Si alguno de estos no existe dentro del grafo, lanzara KeyError.
-            - heuristica: funcion que recibe dos parametros (un vertice y el destino) y nos devuelve la 'distancia' a tener en cuenta para ajustar los resultados y converger mas rapido.
-            Por defecto, la funcion nula (devuelve 0 siempre)
+            - modificar_peso: funcion que recibe un parametro (el peso de una arista) y devuelve un nuevo peso.
+            Por defecto, la funcion nula devuelve el mismo peso recibido.
         Devuelve:
             - Listado de vertices (identificadores) ordenado con el recorrido, incluyendo a los vertices de origen y destino.
             En caso que no exista camino entre el origen y el destino, se devuelve None.
         '''
         if not destino in self: raise KeyError("El destino no se encuentra en el grafo.")
-        n_grafo = self.sssp(origen, destino)
-        lista = []
-        orden_actual = 0
+        padre = self.sssp(destino, origen, modificar_peso)[0] # pido el camino inverso para luego poder insertar elementos al final de la lista y no al principio. Al ser un grafo no dirigido, es igual.
+        actual = origen
+        lista = [actual]
+        while actual != destino:
+            try:
+                actual = padre[actual][0]
+            except KeyError:
+                return None # el grafo no es conexo, porque el origen o alguno de los elementos no tiene padre
+            lista.append(actual)
+        return lista
 
-        def visitar(v, padre, orden, extra):
-            if extra[0] != orden[v]:
-                for x in range(extra[0]-orden[v]):
-                    extra[1].pop()
-            extra[1].append(v)
-            extra[0] = orden[v]+1
-            return v != extra[2]
-
-        padre, orden = n_grafo.dfs(visitar, [orden_actual, lista, destino], origen)
-        return lista if lista[-1] == destino else None # en caso que no sea conexo
-
-    def sssp(self, origen, destino = None): # (Single-source short path)
+    def sssp(self, origen, destino = None, modificar_peso = lambda peso:peso): # (Single-source short path) implementado con Dijkstra
         '''Calcula los caminos minimos desde un vertice origen a todos los vertices alcanzables desde ese vertice a menos que se indice un destino, en cuyo caso terminara la ejecuccion cuando encuentre el camino mas corto al destino.
         Toma como hipotesis que los pesos de los vertices son positivos. Parametros:
             - origen y destino: identificadores de vertices dentro del grafo. Si alguno de estos no existe dentro del grafo, lanzara KeyError.
+            - modificar_peso: funcion que recibe el peso y devuelve un peso modficado.
         Devuelve:
-            - un nuevo grafo, con los mismos vertices que el original, pero en con los caminos minimos desde el origen.
+            - un diccionario con los padres de cada vertice. La clave es el hijo y el valor es una tupla con el padre y el peso de la arista, respectivamente. Notar que solo contendra los vertices alcanzables desde el origen.
+            - un diccionario con las distancias desde el origen a cada vertice. La clave es vertice y el valor es la distancia.
         '''
-        n_grafo = Grafo(self._es_dirigido)
-        padre = {}
-        visitados = {}
-        heap_v = heapdict()
+        # print(origen)
+        # start_time = time.time()
+
+        heap_v      = []
+        padre       = {}
+        visitados   = {}
+        heap_dicc   = {}
+        distancia   = {}
+
         for v in self:
-            n_grafo.add(v)
-            heap_v[v] = float("inf")
-        heap_v[origen] = 0
-        visitados[origen] = True
-        padre[origen] = None
+            heap_dicc[v] = float("inf")
+
+        heap_v.append((0, origen))
+        padre[origen]       = None
+        distancia[origen]   = 0
+        heap_dicc[origen]   = 0
 
         while heap_v:
-            key, value = heap_v.popitem()
-            visitados[key] = True # key esta en el camino minimo
-            if destino and key == destino: break
-            for v in self.adyacentes(key):
-                if v not in visitados and heap_v[v] > value + self.obtener_peso_arista(key, v):# relax
-                    for a in list(n_grafo._grafo[v]):
-                        n_grafo.borrar_arista(a, v)
-                    n_grafo.agregar_arista(key, v, self.obtener_peso_arista(key, v))
-                    heap_v[v] = value + self.obtener_peso_arista(key, v)
-                    padre[v] = key
+            prior, ver = heapq.heappop(heap_v)
+            visitados[ver] = True # key esta en el camino minimo
+            if ver == destino: break
+            for v in self.adyacentes(ver):
+                if v not in visitados and heap_dicc[v] > heap_dicc[ver] + modificar_peso(self.obtener_peso_arista(ver, v)): # relax
+                    heapq.heappush(heap_v, (heap_dicc[ver] + modificar_peso(self.obtener_peso_arista(ver, v)), v))
+                    padre[v] = (ver, self.obtener_peso_arista(ver, v))
+                    distancia[v] = distancia[ver] + self.obtener_peso_arista(ver, v)
+                    heap_dicc[v] = heap_dicc[ver] + modificar_peso(self.obtener_peso_arista(ver, v))
+
+        # padre = {}
+        # distancia = {}
+        # visitados = {}
+        # heap_v = Heap()
+        # for v in self:
+        #     heap_v[v] = float("inf")
+        # heap_v[origen] = 0
+        # padre[origen] = None
+        # distancia[origen] = 0
+        # # print("listo")
+        # while heap_v:
+        #     key, value = heap_v.popitem()
+        #     visitados[key] = True # key esta en el camino minimo
+        #     # if key == destino: break
+        #     for v in self.adyacentes(key):
+        #         if v not in visitados and heap_v[v] > value + modificar_peso(self.obtener_peso_arista(key, v)):# relax
+        #             heap_v[v] = value + modificar_peso(self.obtener_peso_arista(key, v))
+        #             padre[v] = (key, self.obtener_peso_arista(key, v))
+        #             distancia[v] = value + self.obtener_peso_arista(key, v)
+        # print("--- %s seconds ---" % (time.time() - start_time))
+        return padre, distancia
+
+    @staticmethod
+    def crear_grafo_con_padre(padre, es_pesado = False, es_dirigido = False):
+        """A partir de un diccionario de padres crea y devuelve un grafo con los respectivos datos. Parametros:
+            - padre: un diccionario con los hijos como clave y los padres como valor. Si es pesado los valores son tuplas que se corresponden al padre y al peso de la arista, respectivamente.
+            - es_pesado: indica si el grafo sera pesado o no.
+            - es_dirigido: indica si el grafo sera dirigido o no.
+        Devuelve:
+            - un nuevo grafo con los datos correspondientes al diccionario de padres."""
+        n_grafo = Grafo(es_dirigido)
+        for v in padre.keys():
+            n_grafo.add(v)
+        if es_pesado:
+            for v1, tupla in padre.items():
+                if tupla:
+                    n_grafo.agregar_arista(v1, tupla[0], tupla[1])
+        else:
+            for v1, v2 in padre.items():
+                if v2:
+                    n_grafo.agregar_arista(v1, v2)
         return n_grafo
 
     def mst(self): # Calculado con Kruskal
@@ -314,22 +361,31 @@ class Grafo(object):
                 Una lista con los vertices (ids) recorridos, en el orden del recorrido.
         '''
         lista = []
-        lista_aux = []
+        dicc_aux = {}
         if not origen:
             origen = random.choice(list(self._grafo.keys()))
         actual = origen
         if not pesado:
             for x in range(largo):
-                actual = random.choice(self.adyacentes(actual))
+                actual = random.choice(list(self.adyacentes(actual)))
                 lista.append(actual)
         else:
             for x in range(largo):
+                tot = 0
+                for v in self.adyacentes(actual): # esta implementacion es de orden igual a la cantidad de vertices adyacentes.
+                    tot+=self.obtener_peso_arista(actual, v)
+                rand = random.random()
                 for v in self.adyacentes(actual):
-                    for x in range(self.obtener_peso_arista(actual, v)):
-                        lista_aux.append(v)
-                actual = random.choice(lista_aux)
-                lista.append(actual)
-                lista_aux = []
+                    rand-=self.obtener_peso_arista(actual, v)/tot
+                    if rand <= 0:
+                        actual = v
+                        lista.append(actual)
+                        break
+                #     for x in range(self.obtener_peso_arista(actual, v)): # esta implementacion es muy practica para aristas de poco peso. Para aristas con un peso 'alto' habria que insertar muchos elementos en lista_aux, lo que lo haria más ineficiente.
+                #         lista_aux.append(v)
+                # actual = random.choice(lista_aux)
+                # lista.append(actual)
+                # lista_aux = []
         return lista
 
     def __str__(self):
@@ -337,3 +393,214 @@ class Grafo(object):
 
     def __repr__(self):
         return self.__str__()
+
+    def _similares(self, origen, n, sin_adyacentes = False):
+        '''Dado un personaje origen, encuentra los n personajes más similares a este.
+        Si sin_adyacentes es True, la lista devuelta no contiene vertices adyacentes al origen. Parámetros:
+             -origen: el personaje en cuestión, al que se le buscan los similares.
+             -n: la cantidad de personajes semejantes que se desean busca.
+             -sin_adyacentes: determina si la lista devuelta contendra o no vertices adyacentes al origen.
+        Salida: De mayor a menor similaridad, los n personajes más similares al personaje indicado.'''
+        def devolver_frecuencias(lista):
+            '''Arma un diccionario con las frecuencias de cada elemento en la lista.
+            Parametros:
+                -lista: la lista sobre la cual se quiere saber las frecuencias.
+            Devuelve:
+                -un diccionario con los elementos de la lista como claves y las frecuencias como valor.'''
+            dicc_f = {}
+            for elem in lista:
+                dicc_f[elem] = dicc_f.get(elem, 0)+1
+            return dicc_f
+
+        lista = []
+        dicc_aux = {}
+        if sin_adyacentes:
+            for v in self.adyacentes(origen):
+                dicc_aux[v] = True
+        while len(lista) != n: # realizo random walks de largo n y agrego un personaje a la lista por cada random walk
+            dicc_temp = devolver_frecuencias(self.random_walk(n, origen, True))
+            lista_temp = sorted(dicc_temp.items(), key=operator.itemgetter(1))
+            while lista_temp:
+                elem = lista_temp.pop()[0]
+                if not elem in dicc_aux:
+                    lista.append(elem)
+                    dicc_aux[elem] = True
+                    break
+        return lista
+
+    def n_similares(self, origen, n):
+        '''Dado un personaje origen, encuentra los n personajes más similares a este. Parámetros:
+             -origen: el personaje en cuestión, al que se le buscan los similares.
+             -n: la cantidad de personajes semejantes que se desean busca.
+        Salida: De mayor a menor similaridad, los n personajes más similares al personaje indicado.'''
+        return self._similares(origen, n, False)
+
+    def n_recomendar(self, origen, n):
+        '''Dado un personaje con el cual se quiere realizar un nuevo comic, recomendar otro (u otros) personaje con el cual no haya participado aún en un comic, y sea lo más similar a él posible. Parámetros:
+             -origen: el personaje en cuestión, al que se le buscan los similares.
+             -n: la cantidad de personajes semejantes que se desean busca.
+        Salida: De mayor a menor similaridad, los n personajes más similares al personaje indicado.'''
+        return self._similares(origen, n, True)
+
+    def camino(self, origen, destino):
+        '''Encuentra el camino mas corto en tiempo entre origen y destino. Parametros:
+            - origen y destino: identificadores de vertices dentro del grafo. Si alguno de estos no existe dentro del grafo, lanzara KeyError.
+        Devuelve:
+            - una lista con el recorrido.'''
+        return self.camino_minimo(origen, destino, lambda peso:(1/peso))
+
+    def centralidad_exacta(self, cantidad):
+        '''Obtener los personajes más centrales de la red. Los personajes más centrales suelen ser a su vez los más importantes (o lo que se dice en redes sociales, influyente). Parámetros:
+            - cantidad: la cantidad de personajes que se desean mostrar.
+        Salida: Los ‘cantidad’ Personajes más centrales de la red, mostrado de mayor a menor.
+        '''
+        cent = {}
+        x = 0
+        for v in self: cent[v] = 0
+        for v in self:
+
+            start_time = time.time()
+            padre, distancia = self.dijkstra(v)
+
+            cent_aux = {}
+
+            vertices_ordenados = filter(lambda item: item[1] != float("inf"), distancia.items())
+            vertices_ordenados = sorted(vertices_ordenados, key=operator.itemgetter(1), reverse=True)
+
+            for w in distancia.keys(): cent_aux[w] = 0
+            for w in vertices_ordenados[:-1]: # no incluyo el origen, porque no tiene padre
+                cent_aux[padre[w[0]][0]]+= 1 + cent_aux[w[0]]
+            for w in cent_aux:
+                if w == v: continue
+                cent[w] += cent_aux[w]
+            x+=1;
+            print("--- %s seconds ---" % (time.time() - start_time))
+        print(cent)
+
+    def dijkstra_mejorado(self, origen, caminos): # (Single-source short path) implementado con Dijkstra
+        '''Calcula los caminos minimos desde un vertice origen a todos los vertices alcanzables desde ese vertice.
+        Toma como hipotesis que los pesos de los vertices son positivos. Parametros:
+            - origen: identificador de vertices dentro del grafo. Si no existe dentro del grafo, lanzara KeyError.
+            - caminos: un diccionario que guarda los caminos minimos encontrados por dijkstra anteriormente.
+        Devuelve:
+            - un diccionario con los padres de cada vertice. La clave es el hijo y el valor es una tupla con el padre y el peso de la arista, respectivamente. Notar que solo contendra los vertices alcanzables desde el origen.
+            - un diccionario con las distancias desde el origen a cada vertice. La clave es vertice y el valor es la distancia.
+        '''
+        distancia = {}
+        optimizado = {}
+        optimizado[origen] = True
+        cola = Cola()
+        cola.encolar(origen)
+        while cola:
+            actual = cola.desencolar()
+            for v, source in caminos[actual].items():
+                if not v in optimizado:
+                    distancia[v] = self.obtener_peso_arista(v, actual)
+                    optimizado[v] = True
+                    if source != v: cola.encolar(v)
+
+        # visitados = {}
+        # visitados[origen] = True
+        #
+        # for v in self.adyacentes(origen):
+        #     pass
+        #
+        # return padre, distancia
+
+        # n_similares anterior
+        # lista = []
+        # lista_aux = []
+        # visitados = {}
+        # pesos = {}
+        # dic_aux = {}
+        # cola = Cola()
+        #
+        # pesos[origen] = 0
+        # visitados[origen] = True
+        # cola.encolar(origen)
+        #
+        # while cola:
+        #     while cola:
+        #         u = cola.desencolar()
+        #         for v in self.adyacentes(u):
+        #             if v not in visitados and pesos.get(v, 0) < self.obtener_peso_arista(u, v) + pesos[u]:
+        #                 pesos[v] = self.obtener_peso_arista(u, v) + pesos[u]
+        #                 dic_aux[v] = pesos[v]
+        #
+        #     for v, peso in list(dic_aux.items()):
+        #         del dic_aux[v]
+        #         lista_aux.append(Vertice(v, peso))
+        #         visitados[v] = True
+        #         cola.encolar(v)
+        #
+        #     lista_aux.sort()
+        #     for x in range(len(lista_aux)):
+        #         lista.append(lista_aux.pop().nombre)
+        #         if len(lista) == n: return lista
+        # return lista
+
+        # camino_minimo anterior
+        # return lista if lista[-1] == destino else None # en caso que no sea conexo
+        # orden_actual = 0
+        #
+        # def visitar(v, padre, orden, extra):
+        #     if extra[0] != orden[v]:
+        #         for x in range(extra[0]-orden[v]):
+        #             extra[1].pop()
+        #     extra[1].append(v)
+        #     extra[0] = orden[v]+1
+        #     return v != extra[2]
+        #
+        # padre, orden = n_grafo.dfs(visitar, [orden_actual, lista, destino], origen)
+
+    def dijkstra(self, origen): # (Single-source short path) implementado con Dijkstra
+
+        heap_v      = []
+        padre       = {}
+        visitados   = {}
+        distancia   = {}
+
+        for v in self:
+            distancia[v] = float("inf")
+
+        heap_v.append((0, origen))
+        padre[origen]       = None
+        distancia[origen]   = 0
+
+        while heap_v:
+            prior, ver = heapq.heappop(heap_v)
+            visitados[ver] = True # key esta en el camino minimo
+            for v in self.adyacentes(ver):
+                if v not in visitados and distancia[v] > distancia[ver] + (self.obtener_peso_arista(ver, v)): # relax
+                    peso = self.obtener_peso_arista(ver, v)
+                    heapq.heappush(heap_v, (distancia[ver] + (peso), v))
+                    padre[v] = (ver, peso)
+                    distancia[v] = distancia[ver] + peso
+
+        return padre, distancia
+        # return padre, distancia2
+
+        heap_v      = []
+        padre       = {}
+        visitados   = {}
+        heap_dicc   = {}
+        distancia   = {}
+
+        for v in self:
+            heap_dicc[v] = float("inf")
+
+        heap_v.append((0, origen))
+        padre[origen]       = None
+        distancia[origen]   = 0
+        heap_dicc[origen]   = 0
+
+        while heap_v:
+            prior, ver = heapq.heappop(heap_v)
+            visitados[ver] = True # key esta en el camino minimo
+            if ver == destino: break
+            for v in self.adyacentes(ver):
+                if v not in visitados and heap_dicc[v] > heap_dicc[ver] + modificar_peso(self.obtener_peso_arista(ver, v)): # relax
+                    heapq.heappush(heap_v, (heap_dicc[ver] + modificar_peso(self.obtener_peso_arista(ver, v)), v))
+                    padre[v] = (ver, self.obtener_peso_arista(ver, v))
+                    distancia[v] = distancia[ver] + self.obtener_peso_arista(ver, v)
+                    heap_dicc[v] = heap_dicc[ver] + modificar_peso(self.obtener_peso_arista(ver, v))

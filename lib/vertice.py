@@ -10,9 +10,6 @@ class Vertice(object):
             self.__setattr__(nombre_dato,  type(arg))
             self.__dict__[nombre_dato] = arg
 
-    def __eq__(a, b):
-        return a.nombre == b.nombre
-
     def __lt__(a, b):
         return a.clave < b.clave
 
